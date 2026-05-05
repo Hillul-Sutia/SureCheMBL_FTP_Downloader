@@ -1,0 +1,6 @@
+base_url: "https://ftp.ebi.ac.uk/pub/databases/chembl/SureChEMBL/bulk_data/"
+num_workers: 8
+download_dir: "data"
+file_filter: "compounds"
+timeout: 10
+retries: 3
