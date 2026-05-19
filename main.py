@@ -19,6 +19,8 @@ def run_pipeline():
 
     months = list_directories(base_url)
 
+    all_tasks = []
+
     for month in months:
         print(f"Processing {month}")
 
@@ -32,7 +34,25 @@ def run_pipeline():
             for url in files
         ]
 
-        download_files_parallel(tasks, num_workers, timeout, retries)
+        all_tasks.extend(tasks)
+
+    all_tasks = all_tasks[:4]
+    download_files_parallel(all_tasks, num_workers, timeout, retries)
+
+    # for month in months:
+    #     print(f"Processing {month}")
+
+    #     month_dir = os.path.join(download_dir, month)
+    #     os.makedirs(month_dir, exist_ok=True)
+
+    #     files = list_files(base_url, month, file_filter)
+
+    #     tasks = [
+    #         (url, os.path.join(month_dir, url.split("/")[-1]))
+    #         for url in files
+    #     ]
+
+    #     download_files_parallel(tasks, num_workers, timeout, retries)
 
 
 if __name__ == "__main__":
