@@ -1,18 +1,38 @@
+sample_compounds.parquet
+extractor.py
+file_structure.txt
+gen_chem_data.py
+sample_data.py
 SureChEMBLE_ftp_downloader.py
-# Python cache
+# Python
 __pycache__/
 *.pyc
 
+# Virtual env
+venv/
+.venv/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Spark
+spark-warehouse/
+
 # Logs
 logs/
+*.log
 
-# Downloaded datasets
-data/
+# Data
+data/raw/
+data/processed/
+data/parquet/
 
-# Virtual environments
-venv/
-.env/
+# VS Code
+.vscode/
 
-# OS files
+# OS
 .DS_Store
 Thumbs.db
+
+# Environment
+.env
