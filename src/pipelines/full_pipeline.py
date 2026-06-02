@@ -2,7 +2,7 @@ from src.downloader.ftp_client import FTPClient
 from src.downloader.downloader import Downloader
 from src.spark.session import create_spark
 
-def run():
+def run_pipeline():
 
     spark = create_spark()
 

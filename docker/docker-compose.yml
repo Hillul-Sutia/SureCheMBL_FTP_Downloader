@@ -1,16 +1,17 @@
-version: '3.9'
-
 services:
   surechembl:
     build:
       context: ..
       dockerfile: docker/Dockerfile
 
-    container_name: surechembl_pipeline
+    container_name: surechembl_container
 
     volumes:
-      - ../data:/app/data
+      # - ../data:/app/data
+      - ..:/app
 
-    working_dir: /app
+    environment:
+      - PYSPARK_PYTHON=python
+      - PYSPARK_DRIVER_PYTHON=python
 
-    command: python main.py
+    tty: true
