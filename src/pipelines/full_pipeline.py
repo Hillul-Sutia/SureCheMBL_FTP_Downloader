@@ -1,58 +1,146 @@
 import os
+
+from src.spark.session import create_spark
+
 from src.downloader.ftp_client import FTPClient
 from src.downloader.downloader import Downloader
-from src.spark.session import create_spark
+
+from src.spark.parquet_io import read_parquet
+from src.discovery.chemical_columns import identify_chemical_columns
+from src.discovery.id_detection import detect_id_columns
 
 
 def run_pipeline():
+    try:
+        # --------------------------- spark session creation --------------------------- # 
+        spark = create_spark()
+        # ------------------------------------------------------------------------------ #
 
-    spark = create_spark()
 
-    # FTP Address and Connection
-    ftp_dir = "/pub/databases/chembl/SureChEMBL/bulk_data"
+        # ----------------------- FTP Address and Connection --------------------------- #
+        
+        ftp_dir = "/pub/databases/chembl/SureChEMBL/bulk_data"
 
-    ftp_client = FTPClient("ftp.ebi.ac.uk")
-    ftp = ftp_client.connect()
+        ftp_client = FTPClient("ftp.ebi.ac.uk")
+        ftp = ftp_client.connect()
+        
+        # ------------------------------------------------------------------------------ #
+        
 
-    date_dirs = ftp_client.list_files(ftp_dir)
+        # ------------------- listing directories/folders in ftp address --------------- # 
+        date_dirs = ftp_client.list_files(ftp_dir)
 
-    latest_date_dir = sorted(date_dirs)[-1]
+        print("Date folders:", len(date_dirs))
+        print(date_dirs[:10])
+        # ------------------------------------------------------------------------------ #
 
-    print("Date folders:", len(date_dirs))
-    print(date_dirs[:10])
 
-    latest_folder = f"{ftp_dir}/{latest_date_dir}"
+        # --------------------- Selecting directory in ftp --------------------------- #
+        latest_date_dir = sorted(date_dirs)[-1]
+        
+        latest_folder = f"{ftp_dir}/{latest_date_dir}"
+        # ------------------------------------------------------------------------------ #
 
-    files = ftp_client.list_files(latest_folder)
+        # --------------- selecting single file from ftp directory --------------------- #
+        
+        files = ftp_client.list_files(latest_folder)
 
-    print(f"Files in latest release {latest_date_dir}:")
-    print(files)
+        print(f"Files in latest release {latest_date_dir}:")
+        print(files)
 
-    parquet_files = [
-        f for f in files
-        if f.endswith("compounds.parquet")
-    ]
+        parquet_files = [
+            f for f in files
+            if f.endswith("compounds.parquet")
+        ]
 
-    if not parquet_files:
-        raise FileNotFoundError(
-            f"No compounds.parquet found in {latest_folder}"
+        if not parquet_files:
+            raise FileNotFoundError(
+                f"No compounds.parquet found in {latest_folder}"
+            )
+
+        first_file = parquet_files[0]
+
+        # ------------------------------------------------------------------------------ #
+
+        # --------------------------------- Downloading File --------------------------- #
+        remote_file = f"{latest_folder}/{first_file}"
+
+        local_file  = (
+            f"data/raw/{latest_date_dir}.parquet"
+        )
+        # downloader = Downloader(ftp)
+
+        # downloader.download_file(
+        #     remote_file,
+        #     local_file
+        # )
+        # ------------------------------------------------------------------------------ #
+
+        # ---------------------- pyspark load parquet file ----------------------------- #
+        df = read_parquet(
+            spark,
+            local_file
         )
 
-    first_file = parquet_files[0]
 
-    remote_file = f"{latest_folder}/{first_file}"
+        print("Columns:")
+        print(df.columns)
+        # ------------------------------------------------------------------------------ #
 
-    downloader = Downloader(ftp)
+        # ------------------------ sampling to DataFrame ------------------------------- #
+        sample_df = (
+            df
+            .limit(10000)
+            .toPandas()
+        )
+        # ------------------------------------------------------------------------------ #
 
-    downloader.download_file(
-        remote_file,
-        f"data/{latest_date_dir}.parquet"
-    )
+        # ------------ sampling to DataFrame to find chemical data columns ------------- #
+        chemical_result = identify_chemical_columns(
+            sample_df
+        )
 
-    print("Pipeline completed.")
+        print("Chemical columns found:")
+        print(chemical_result)
+        # ------------------------------------------------------------------------------ #
 
-    ftp_client.close()
-    spark.stop()
+        # ------------------- Excluding chemical data columns -------------------------- #
+        excluded_cols = set()
+
+        for key in ["SMILES", "InChI", "InChIKey", "URL"]:
+            excluded_cols.update(chemical_result[key])
+
+        candidate_id_cols = [
+            col for col in df.columns
+            if col not in excluded_cols
+        ]
+
+        print("Excluded columns:", excluded_cols)
+        print("Candidate ID columns:", candidate_id_cols)
+        # ------------------------------------------------------------------------------ #
+
+        # ----------------------- Find database ID column ------------------------------ #
+        id_columns = detect_id_columns(
+            df,
+            candidate_id_cols
+        )
+
+        print("Detected ID columns:")
+        print(id_columns)
+        # ------------------------------------------------------------------------------ #
+
+        # ----------------------- Canonical Transformation ----------------------------- #
+
+
+
+
+
+
+        print("Pipeline completed.")
+
+    finally:
+        ftp_client.close()
+        spark.stop()
 
 # if __name__ == "__main__":
 #     run()

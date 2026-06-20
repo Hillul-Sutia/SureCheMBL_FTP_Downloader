@@ -5,6 +5,9 @@ file_structure.txt
 gen_chem_data.py
 sample_data.py
 SureChEMBLE_ftp_downloader.py
+c_file_structure.txt
+docker_readme.txt
+
 # Python
 __pycache__/
 *.pyc
