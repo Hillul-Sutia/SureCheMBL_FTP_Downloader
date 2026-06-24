@@ -4,12 +4,10 @@ from pyspark.sql.functions import (
 )
 
 from src.transformation.canonicalization import (
-    canonical_smiles_udf,
-    inchikey_udf
+    canonicalize_udf
 )
 
-
-def create_database_id(df, id_columns):
+def create_database_id_col(df, id_columns):
     """
     Creates a single Database_ID column.
 
@@ -37,65 +35,52 @@ def create_database_id(df, id_columns):
         concat_ws(",", *id_columns)
     )
 
-
-def add_canonical_smiles(
-    df,
-    smiles_column
-):
+def add_canonical_data(df, smiles_column):
     """
-    Generates canonical SMILES.
+    Adds canonical_smiles and inchikey columns.
     """
 
-    return df.withColumn(
-        "Canonical_SMILES",
-        canonical_smiles_udf(
+    df = df.withColumn(
+        "chemical_data",
+        canonicalize_udf(
             col(smiles_column)
         )
     )
 
-
-def add_inchikey(
-    df,
-    smiles_column
-):
-    """
-    Generates InChIKey from SMILES.
-    """
-
-    return df.withColumn(
-        "InChIKey",
-        inchikey_udf(
-            col(smiles_column)
+    df = (
+        df
+        .withColumn(
+            "canonical_smiles",
+            col("chemical_data.canonical_smiles")
         )
+        .withColumn(
+            "inchikey",
+            col("chemical_data.inchikey")
+        )
+        .drop("chemical_data")
     )
 
+    return df
 
 def standardize_dataset(
     df,
     id_columns,
     smiles_column
 ):
-    """
-    Complete standardization workflow.
-    """
 
-    df = create_database_id(
+    df = create_database_id_col(
         df,
         id_columns
     )
 
-    df = add_canonical_smiles(
-        df,
-        smiles_column
-    )
-
-    df = add_inchikey(
+    df = add_canonical_data(
         df,
         smiles_column
     )
 
     return df.select(
-        "Database_ID",
-        "Canonical_SMILES",
-        "InChIKey"
+        col("Database_ID").alias("database_id"),
+        #col(smiles_column).alias("smiles"),
+        col("canonical_smiles"),
+        col("inchikey")
     )

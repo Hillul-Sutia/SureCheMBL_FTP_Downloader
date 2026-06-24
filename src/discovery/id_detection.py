@@ -5,27 +5,26 @@ from pyspark.sql.functions import (
     max
 )
 
-def detect_id_columns(
-    df,
+def verify_candidate_ids(
+    spark_df,
     candidate_columns
 ):
-
     valid_columns = []
 
-    total_rows = df.count()
+    total_rows = spark_df.count()
 
     for column in candidate_columns:
 
         distinct_count = (
-            df
+            spark_df
             .select(column)
             .distinct()
             .count()
         )
 
         null_count = (
-            df
-            .filter(df[column].isNull())
+            spark_df
+            .filter(spark_df[column].isNull())
             .count()
         )
 
@@ -36,32 +35,6 @@ def detect_id_columns(
             valid_columns.append(column)
 
     return valid_columns
-
-
-def verify_candidate_ids(
-    spark_df,
-    candidate_columns
-):
-
-    total_rows = spark_df.count()
-
-    verified = []
-
-    for column in candidate_columns:
-
-        distinct_count = (
-            spark_df
-            .select(
-                countDistinct(col(column))
-                .alias("distinct_count")
-            )
-            .collect()[0]["distinct_count"]
-        )
-
-        if distinct_count == total_rows:
-            verified.append(column)
-
-    return verified
 
 
 def is_sequential_column(
@@ -115,3 +88,35 @@ def get_database_ids(
     ]
 
     return verified
+
+# def detect_id_columns(
+#     df,
+#     candidate_columns
+# ):
+
+#     valid_columns = []
+
+#     total_rows = df.count()
+
+#     for column in candidate_columns:
+
+#         distinct_count = (
+#             df
+#             .select(column)
+#             .distinct()
+#             .count()
+#         )
+
+#         null_count = (
+#             df
+#             .filter(df[column].isNull())
+#             .count()
+#         )
+
+#         if (
+#             distinct_count == total_rows
+#             and null_count == 0
+#         ):
+#             valid_columns.append(column)
+
+#     return valid_columns

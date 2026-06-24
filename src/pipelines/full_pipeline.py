@@ -1,4 +1,5 @@
 import os
+import json
 
 from src.spark.session import create_spark
 
@@ -7,16 +8,22 @@ from src.downloader.downloader import Downloader
 
 from src.spark.parquet_io import read_parquet
 from src.discovery.chemical_columns import identify_chemical_columns
-from src.discovery.id_detection import detect_id_columns
+from src.discovery.id_detection import get_database_ids #, detect_id_columns
+from src.transformation.standardization import standardize_dataset
+
+
 
 
 def run_pipeline():
+    spark = None
+    ftp_client = None
     try:
+        
         # --------------------------- spark session creation --------------------------- # 
         spark = create_spark()
         # ------------------------------------------------------------------------------ #
 
-
+        """
         # ----------------------- FTP Address and Connection --------------------------- #
         
         ftp_dir = "/pub/databases/chembl/SureChEMBL/bulk_data"
@@ -120,7 +127,7 @@ def run_pipeline():
         # ------------------------------------------------------------------------------ #
 
         # ----------------------- Find database ID column ------------------------------ #
-        id_columns = detect_id_columns(
+        id_columns = get_database_ids(
             df,
             candidate_id_cols
         )
@@ -131,16 +138,54 @@ def run_pipeline():
 
         # ----------------------- Canonical Transformation ----------------------------- #
 
+        smiles_column = chemical_result["SMILES"][0]
 
+        standardized_df = standardize_dataset(
+            df,
+            id_columns,
+            smiles_column
+        )
+        standardized_df.show(5, truncate=False)
+        
+        standardized_df.write.mode("overwrite").parquet(
+            f"data/processed/{latest_date_dir}.parquet"
+        )
+        """
+        output_path = "data/processed/latest.parquet"
+        standardized_df = spark.read.parquet(output_path)
+        latest_date_dir = 'latest'
 
+        total_rows = standardized_df.count()
 
+        null_smiles = standardized_df.filter(
+            standardized_df.canonical_smiles.isNull()
+        ).count()
 
+        null_ids = standardized_df.filter(
+            standardized_df.database_id.isNull()
+        ).count()
+
+        metadata = {
+            "release": latest_date_dir,
+            "rows": total_rows,
+            "null_smiles": null_smiles,
+            "null_ids": null_ids
+        }
+
+        os.makedirs("data/metadata", exist_ok=True)
+
+        metadata_path = f"data/metadata/{latest_date_dir}.json"
+
+        with open(metadata_path, "w") as f:
+            json.dump(metadata, f, indent=4)
 
         print("Pipeline completed.")
 
     finally:
-        ftp_client.close()
-        spark.stop()
+        if ftp_client:
+            ftp_client.close()
+        if spark:
+            spark.stop()
 
 # if __name__ == "__main__":
 #     run()

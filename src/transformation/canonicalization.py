@@ -1,33 +1,59 @@
 from rdkit import Chem
-from pyspark.sql.functions import udf
-from pyspark.sql.types import StringType
 
-@udf(StringType())
-def canonical_smiles_udf(smiles):
+from pyspark.sql.functions import udf
+from pyspark.sql.types import (
+    StructType,
+    StructField,
+    StringType
+)
+
+
+canonical_schema = StructType([
+    StructField(
+        "canonical_smiles",
+        StringType(),
+        True
+    ),
+    StructField(
+        "inchikey",
+        StringType(),
+        True
+    )
+])
+
+
+@udf(canonical_schema)
+def canonicalize_udf(smiles):
 
     if smiles is None:
-        return None
+        return {
+            "canonical_smiles": None,
+            "inchikey": None
+        }
 
-    mol = Chem.MolFromSmiles(smiles)
+    try:
+        mol = Chem.MolFromSmiles(smiles)
 
-    if mol:
-        return Chem.MolToSmiles(
+        if mol is None:
+            return {
+                "canonical_smiles": None,
+                "inchikey": None
+            }
+
+        canonical_smiles = Chem.MolToSmiles(
             mol,
             canonical=True
         )
 
-    return None
+        inchikey = Chem.MolToInchiKey(mol)
 
+        return {
+            "canonical_smiles": canonical_smiles,
+            "inchikey": inchikey
+        }
 
-@udf(StringType())
-def inchikey_udf(smiles):
-
-    if smiles is None:
-        return None
-
-    mol = Chem.MolFromSmiles(smiles)
-
-    if mol:
-        return Chem.MolToInchiKey(mol)
-
-    return None
+    except Exception:
+        return {
+            "canonical_smiles": None,
+            "inchikey": None
+        }
