@@ -12,7 +12,9 @@ from src.discovery.id_detection import get_database_ids #, detect_id_columns
 from src.transformation.standardization import standardize_dataset
 
 
+from src.utils.logger import get_logger
 
+logger = get_logger(__name__)
 
 def run_pipeline():
     spark = None
@@ -23,7 +25,7 @@ def run_pipeline():
         spark = create_spark()
         # ------------------------------------------------------------------------------ #
 
-        """
+        
         # ----------------------- FTP Address and Connection --------------------------- #
         
         ftp_dir = "/pub/databases/chembl/SureChEMBL/bulk_data"
@@ -37,12 +39,12 @@ def run_pipeline():
         # ------------------- listing directories/folders in ftp address --------------- # 
         date_dirs = ftp_client.list_files(ftp_dir)
 
-        print("Date folders:", len(date_dirs))
-        print(date_dirs[:10])
+        logger.info(f"Date folders: {len(date_dirs)}", )
+        logger.info(date_dirs[:10])
         # ------------------------------------------------------------------------------ #
 
 
-        # --------------------- Selecting directory in ftp --------------------------- #
+        # ----------------------- Selecting directory in ftp --------------------------- #
         latest_date_dir = sorted(date_dirs)[-1]
         
         latest_folder = f"{ftp_dir}/{latest_date_dir}"
@@ -52,8 +54,8 @@ def run_pipeline():
         
         files = ftp_client.list_files(latest_folder)
 
-        print(f"Files in latest release {latest_date_dir}:")
-        print(files)
+        logger.info(f"Files in latest release {latest_date_dir}:")
+        logger.info(files)
 
         parquet_files = [
             f for f in files
@@ -69,7 +71,7 @@ def run_pipeline():
 
         # ------------------------------------------------------------------------------ #
 
-        # --------------------------------- Downloading File --------------------------- #
+        # --------------------------------- File Downloading --------------------------- #
         remote_file = f"{latest_folder}/{first_file}"
 
         local_file  = (
@@ -89,9 +91,7 @@ def run_pipeline():
             local_file
         )
 
-
-        print("Columns:")
-        print(df.columns)
+        logger.info(f"Columns: {df.columns}")
         # ------------------------------------------------------------------------------ #
 
         # ------------------------ sampling to DataFrame ------------------------------- #
@@ -107,8 +107,7 @@ def run_pipeline():
             sample_df
         )
 
-        print("Chemical columns found:")
-        print(chemical_result)
+        logger.info(f"Chemical columns found: {chemical_result}")
         # ------------------------------------------------------------------------------ #
 
         # ------------------- Excluding chemical data columns -------------------------- #
@@ -122,8 +121,8 @@ def run_pipeline():
             if col not in excluded_cols
         ]
 
-        print("Excluded columns:", excluded_cols)
-        print("Candidate ID columns:", candidate_id_cols)
+        logger.info("Excluded columns:", excluded_cols)
+        logger.info("Candidate ID columns:", candidate_id_cols)
         # ------------------------------------------------------------------------------ #
 
         # ----------------------- Find database ID column ------------------------------ #
@@ -132,8 +131,7 @@ def run_pipeline():
             candidate_id_cols
         )
 
-        print("Detected ID columns:")
-        print(id_columns)
+        logger.info(f"Detected ID columns: {id_columns}")
         # ------------------------------------------------------------------------------ #
 
         # ----------------------- Canonical Transformation ----------------------------- #
@@ -145,12 +143,13 @@ def run_pipeline():
             id_columns,
             smiles_column
         )
-        standardized_df.show(5, truncate=False)
+
+        # standardized_df.show(5, truncate=False)
         
         standardized_df.write.mode("overwrite").parquet(
             f"data/processed/{latest_date_dir}.parquet"
         )
-        """
+        
         output_path = "data/processed/latest.parquet"
         standardized_df = spark.read.parquet(output_path)
         latest_date_dir = 'latest'
@@ -165,8 +164,20 @@ def run_pipeline():
             standardized_df.database_id.isNull()
         ).count()
 
+        # metadata = {
+        #     "release": latest_date_dir,
+        #     "rows": total_rows,
+        #     "null_smiles": null_smiles,
+        #     "null_ids": null_ids
+        # }
+
         metadata = {
             "release": latest_date_dir,
+            "raw_file": local_file,
+            "processed_file": f"data/processed/{latest_date_dir}.parquet",
+            "release": latest_date_dir,
+            "chemical_columns": chemical_result,
+            "id_columns": id_columns,
             "rows": total_rows,
             "null_smiles": null_smiles,
             "null_ids": null_ids
@@ -179,7 +190,9 @@ def run_pipeline():
         with open(metadata_path, "w") as f:
             json.dump(metadata, f, indent=4)
 
-        print("Pipeline completed.")
+        standardized_df = standardized_df.dropna(how="any")
+
+        logger.info("Pipeline completed.")
 
     finally:
         if ftp_client:
